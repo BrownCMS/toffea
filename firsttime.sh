@@ -5,8 +5,7 @@ source miniconda/bin/activate
 conda create -n toffea python=3.6
 conda activate toffea
 pip install coffea
-conda install -c conda-forge xrootd
-conda install -c conda-forge root
+conda install -c conda-forge xrootd root
 
 pip install --user --editable .
 
