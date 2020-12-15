@@ -24,6 +24,7 @@ from coffea.nanoevents.schemas import NanoAODSchema
 import awkward1 as awk
 import copy
 from coffea.analysis_objects import JaggedCandidateArray
+from coffea.analysis_tools import PackedSelection
 from toffea.common.binning import dijet_binning
 
 np.set_printoptions(threshold=np.inf)
@@ -76,9 +77,8 @@ class TrijetHistogramMaker(processor.ProcessorABC):
 
     def process(self, events):
         output = self._accumulator.identity()
-        print(events.keys())
         dataset_name = events.metadata['dataset']
-        output["total_events"][dataset_name] += events.size
+        output["total_events"][dataset_name] += events.__len__()
 
         # Require 3 jets
         #events_3j = events[events.nJet >= 3]
@@ -106,7 +106,7 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         max_dEta = awk.max(dEta_ij, axis=1)
         min_dR   = awk.min(dR_ij, axis=1)
         min_dEta = awk.min(dEta_ij, axis=1)
-        min_pT = awk.min()
+        min_pT   = awk.min(selected_jets.pt, axis=1)
 
         #m01 = (selected_jets[:, 0] + selected_jets[:, 1]).mass
         #m12 = (selected_jets[:, 1] + selected_jets[:, 2]).mass
@@ -125,8 +125,14 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         selections["sr"] = PackedSelection()
         selections["sr"].add("MaxDEta", max_dEta < 1.3)
         selections["sr"].add("MinDR", min_dR > 0.4)
-        selections["sr"].add("MinJetPt", awk.min(selected_jets.pt) > 50.)
-         
+        selections["sr"].add("MinJetPt", min_pT > 50.)
+
+        # Fill histograms
+        for selection_name, selection in selections.items():
+            self._accumulator["mjjj"].fill(dataset=dataset_name, 
+                                            selection=selection_name, 
+                                            mjjj=m3j[selection.all()]
+                                           )
 
         return output
 
@@ -152,10 +158,12 @@ if __name__ == "__main__":
         year = "2017"
         subsamples = ["Res1ToRes2GluTo3Glu_M1-3000_R-0p5"]
         isMC = True
+        save_tag = "test"
     else:
         year = args.year
         subsamples = args.subsamples.split(",")
         isMC = args.isMC
+        save_tag = args.save_tag
 
     from toffea.filelists.filelists import filelist
 
@@ -205,7 +213,7 @@ if __name__ == "__main__":
                                             "schema": HackSchema},
                                         # maxchunks=1,
                                         )
-    util.save(output, f"DataHistograms_{args.save_tag}.coffea")
+    util.save(output, f"DataHistograms_{save_tag}.coffea")
 
     # Performance benchmarking and cutflows
     ts_end = time.time()
