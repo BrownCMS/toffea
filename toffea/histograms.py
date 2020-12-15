@@ -9,7 +9,7 @@ import gzip
 import pickle
 import json
 import time
-import numexpr
+#import numexpr
 import array
 from functools import partial
 import re
@@ -20,6 +20,7 @@ from coffea import hist
 from coffea import lookup_tools
 from coffea import util
 import coffea.processor as processor
+from coffea.nanoevents.schemas import NanoAODSchema
 import awkward1 as awk
 import copy
 from coffea.analysis_objects import JaggedCandidateArray
@@ -36,10 +37,13 @@ class HackSchema(NanoAODSchema):
         super().__init__(base_form)
 
 class TrijetHistogramMaker(processor.ProcessorABC):
-    def __init__(self):
+    def __init__(self, isMC):
+        self._isMC = isMC
+
         # Histograms
         dataset_axis = hist.Cat("dataset", "Primary dataset")
         selection_axis = hist.Cat("selection", "Selection name")
+
 
         self._accumulator = processor.dict_accumulator()
         self._accumulator["total_events"] = processor.defaultdict_accumulator(int)
@@ -72,7 +76,8 @@ class TrijetHistogramMaker(processor.ProcessorABC):
 
     def process(self, events):
         output = self._accumulator.identity()
-        dataset_name = events['dataset']
+        print(events.keys())
+        dataset_name = events.metadata['dataset']
         output["total_events"][dataset_name] += events.size
 
         # Require 3 jets
@@ -132,9 +137,11 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser(description="Make histograms for B FFR data")
-    parser.add_mutually_exclusive_group("input_group")
+    input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument("--subsamples", "-d", type=str, help="List of subsamples to run (comma-separated")
     input_group.add_argument("--quicktest", "-q", action="store_true", help="Run a small test job")
+    parser.add_argument("--year", "-y", type=str, help="Year: 2016, 2017, or 2018")
+    parser.add_argument("--isMC", "-m", action="store_true", help="Set run over MC instead of collision data")
     parser.add_argument("--workers", "-w", type=int, default=16, help="Number of workers")
     parser.add_argument("--save_tag", "-s", type=str, help="Save tag for output file")
     #parser.add_argument("--nopbar", action="store_true", help="Disable progress bar (do this on condor)")
@@ -142,19 +149,25 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.quicktest:
-        subsamples = ["Run2018D_part2_subjob0"]
+        year = "2017"
+        subsamples = ["Res1ToRes2GluTo3Glu_M1-3000_R-0p5"]
+        isMC = True
     else:
+        year = args.year
         subsamples = args.subsamples.split(",")
+        isMC = args.isMC
 
-    from data_index import in_txt
+    from toffea.filelists.filelists import filelist
 
+    # Make dictionary of subsample : [files to run]
     subsample_files = {}
     for subsample_name in subsamples:
-        if not subsample_name in in_txt:
+        if not subsample_name in filelist[year]:
             raise ValueError(f"Dataset {subsample_name} not in dictionary.")
-
-        with open(in_txt[subsample_name], 'r') as filelist:
-            subsample_files[subsample_name] = [x.strip() for x in filelist.readlines()]
+    for subsample_name in subsamples:
+        #with open(filelist[year][subsample_name], 'r') as filelist_txt:
+        #    subsample_files[subsample_name] = [x.strip() for x in filelist_txt.readlines()]
+        subsample_files[subsample_name] = filelist[year][subsample_name]
 
         if args.quicktest:
             subsample_files[subsample_name] = subsample_files[subsample_name][:3]
@@ -182,11 +195,14 @@ if __name__ == "__main__":
 
     output = processor.run_uproot_job(subsample_files,
                                         treename='Events',
-                                        processor_instance=TrijetHistogramMaker(),
+                                        processor_instance=TrijetHistogramMaker(isMC=isMC),
                                         executor=processor.futures_executor,
-                                        executor_args={'workers': args.workers, 'flatten': False, 'status':not args.condor},
                                         chunksize=50000,
-                                        {"schema": HackSchema}
+                                        executor_args={
+                                            'workers': args.workers, 
+                                            'flatten': False, 
+                                            'status':not args.condor, 
+                                            "schema": HackSchema},
                                         # maxchunks=1,
                                         )
     util.save(output, f"DataHistograms_{args.save_tag}.coffea")
@@ -195,7 +211,7 @@ if __name__ == "__main__":
     ts_end = time.time()
     total_events = 0
     subsample_nevents = {}
-    for k, v in output['nevents'].items():
+    for k, v in output['total_events'].items():
         if k in subsample_nevents:
             subsample_nevents[k] += v
         else:
