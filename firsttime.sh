@@ -6,6 +6,8 @@ conda create -n toffea python=3.7
 conda activate toffea
 pip install coffea==0.6.47
 conda install -c conda-forge xrootd root
+pip uninstall -y ipython prompt_toolkit
+pip install ipython prompt_toolkit
 
 pip install --user --editable .
 

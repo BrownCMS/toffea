@@ -1,0 +1,15 @@
+ERROR in cling::CIFactory::createCI(): cannot extract standard library include paths!
+Invoking:
+  LC_ALL=C x86_64-conda-linux-gnu-c++  -O3 -DNDEBUG -xc++ -E -v /dev/null 2>&1 | sed -n -e '/^.include/,${' -e '/^ \/.*++/p' -e '}'
+Results was:
+With exit code 2
+Traceback (most recent call last):
+  File "index_skims.py", line 9, in <module>
+    import ROOT
+  File "/home/xyan13/Trijet/toffea/miniconda/envs/toffea/lib/python3.7/site-packages/ROOT/__init__.py", line 22, in <module>
+    import cppyy
+  File "/home/xyan13/Trijet/toffea/miniconda/envs/toffea/lib/python3.7/site-packages/cppyy/__init__.py", line 60, in <module>
+    importlib.import_module(libcppyy_mod_name)
+  File "/home/xyan13/Trijet/toffea/miniconda/envs/toffea/lib/python3.7/importlib/__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+KeyboardInterrupt

@@ -16,6 +16,7 @@ import re
 
 import uproot
 import numpy as np
+from IPython.display import display
 from coffea import hist
 from coffea import lookup_tools
 from coffea import util
@@ -27,7 +28,6 @@ from coffea.analysis_objects import JaggedCandidateArray
 from coffea.analysis_tools import PackedSelection
 from toffea.common.binning import dijet_binning
 
-np.set_printoptions(threshold=np.inf)
 
 class HackSchema(NanoAODSchema):
     def __init__(self, base_form):
@@ -69,23 +69,70 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                                                     dataset_axis, 
                                                     selection_axis, 
                                                     hist.Bin(f"dEta{pair[0]}{pair[1]}", f"$\\Delta \\eta_{{{pair[0]}{pair[1]}}}$ [GeV]$", 75, 0., 7.5))
-
+            self._accumulator[f"m{pair[0]}{pair[1]}overM"] = hist.Hist("Events", 
+                                                    dataset_axis, 
+                                                    selection_axis, 
+                                                    hist.Bin(f"m{pair[0]}{pair[1]}overM", f"m{pair[0]}{pair[1]}overM", 100, 0, 1))
+                                                    
+        for jet in [0, 1, 2]:
+            self._accumulator[f"pt{jet}"] = hist.Hist("Events", 
+                                                    dataset_axis, 
+                                                    selection_axis, 
+                                                    hist.Bin(f"pt{jet}", f"pt_{jet}$ [GeV]$", dijet_binning))
+            self._accumulator[f"eta{jet}"] = hist.Hist("Events", 
+                                                    dataset_axis, 
+                                                    selection_axis, 
+                                                    hist.Bin(f"eta{jet}", f"eta_{jet}", 60, -3, 3))
+            self._accumulator[f"ptoverM{jet}"] = hist.Hist("Events", 
+                                                    dataset_axis, 
+                                                    selection_axis, 
+                                                    hist.Bin(f"ptoverM{jet}", f"ptoverM{jet}", 100, 0, 1))
 
     @property
     def accumulator(self):
         return self._accumulator
 
     def process(self, events):
+
         output = self._accumulator.identity()
         dataset_name = events.metadata['dataset']
         output["total_events"][dataset_name] += events.__len__()
-
+        
+        # HLT selection
+        HLT_mask = []
+        if year == "2016":
+            if "SingleMuon" in dataset_name: #this does not work, as the name of file which is under processing is unknown
+                if "2016B2" in dataset_name:
+                    HLT_mask = events.HLT.IsoMu24 | events.HLT.IsoTkMu24 | events.HLT.Mu50
+                else:
+                    HLT_mask = events.HLT.IsoMu24 | events.HLT.IsoTkMu24 | events.HLT.Mu50 | events.HLT.TkMu50
+            else: #https://twiki.cern.ch/twiki/bin/view/CMS/HLTPathsRunIIList
+                if "2016B2" in dataset_name:
+                    HLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+                elif "2016H" in dataset_name:
+                    HLT_mask = events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+                else:
+                    HLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+        if year == "2017":
+            if "SingleMuon" in dataset_name:
+                if "2017B" in dataset_name:
+                    HLT_mask = events.HLT.IsoMu27 | events.HLT.Mu50
+                else:
+                    HLT_mask = events.HLT.IsoMu27 | events.HLT.Mu50 | events.HLT.OldMu100 | events.HLT.TkMu100
+            else:
+                HLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
+        if year == "2018":
+            if "SingleMuon" in dataset_name:
+                HLT_mask = events.HLT.IsoMu24 | events.HLT.Mu50 | events.HLT.OldMu100 | events.HLT.TkMu100
+            else:
+                HLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
+        
         # Require 3 jets
-        #events_3j = events[events.nJet >= 3]
         jet_mask = (events.Jet.pt > 30.) & (abs(events.Jet.eta) < 2.5) & (events.Jet.isTight)
-        event_mask = awk.sum(jet_mask, axis=1) >= 3
+        event_mask = (awk.sum(jet_mask, axis=1) >= 3)
+        event_mask = event_mask & HLT_mask
         events_3j = events[event_mask]
-
+        
         # Reduce jet mask to only events with 3 good jets
         jet_mask = jet_mask[event_mask]
 
@@ -97,11 +144,11 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         #jet_i, jet_j = awk.unzip(pairs)
         pairs = [(0, 1), (1, 2), (2, 0)]
         jet_i, jet_j = zip(*pairs) # Returns [0, 1, 2] , [1, 2, 0]
-
-        m_ij = (events_3j.Jet[:, jet_i] + events_3j.Jet[:, jet_j]).mass
-        dR_ij = events_3j.Jet[:, jet_i].delta_r(events_3j.Jet[:, jet_j])
-        dEta_ij = abs(events_3j.Jet[:, jet_i].eta - events_3j.Jet[:, jet_j].eta)
-
+        
+        m_ij = (selected_jets[:, jet_i] + selected_jets[:, jet_j]).mass
+        dR_ij = selected_jets[:, jet_i].delta_r(selected_jets[:, jet_j])
+        dEta_ij = abs(selected_jets[:, jet_i].eta - selected_jets[:, jet_j].eta)
+        
         max_dR   = awk.max(dR_ij, axis=1)
         max_dEta = awk.max(dEta_ij, axis=1)
         min_dR   = awk.min(dR_ij, axis=1)
@@ -119,20 +166,145 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         #dEta20 = abs(selected_jets[:, 2].eta - selected_jets[:, 0].eta)
 
         m3j = selected_jets.sum().mass #(selected_jets[:, 0] + selected_jets[:, 1] + selected_jets[:, 2]).mass
+        
+        pt_i_overM = selected_jets.pt / m3j
+        m_01_overM = m_ij[:,0] / m3j
+        m_12_overM = m_ij[:,1] / m3j
+        m_20_overM = m_ij[:,2] / m3j
 
         # Event selection
         selections = {}
-        selections["sr"] = PackedSelection()
-        selections["sr"].add("MaxDEta", max_dEta < 1.3)
-        selections["sr"].add("MinDR", min_dR > 0.4)
-        selections["sr"].add("MinJetPt", min_pT > 50.)
+        # selections["JetHLT"] = PackedSelection()
+        # if year == "2016":
+            # JetHLT_mask = []
+            # if "2016B2" in dataset_name:
+                # JetHLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+            # elif "2016H" in dataset_name:
+                # JetHLT_mask = events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+            # else:
+                # JetHLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
+            # selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
+        # if year == "2017":
+            # JetHLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
+            # selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
+        # if year == "2018":
+            # JetHLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
+            # selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
+        # selections["pre-selection"] = PackedSelection()
+        # selections["pre-selection"].add("MaxDEta", max_dEta < 1.3)
+        # selections["pre-selection"].add("MinDR", min_dR > 0.4)
+        # selections["pre-selection"].add("MinJetPt", min_pT > 50.)
+        selections["tight-selection"] = PackedSelection()
+        selections["tight-selection"].add("MinM3j", m3j > 5000)
 
         # Fill histograms
         for selection_name, selection in selections.items():
-            self._accumulator["mjjj"].fill(dataset=dataset_name, 
-                                            selection=selection_name, 
-                                            mjjj=m3j[selection.all()]
-                                           )
+            output["mjjj"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                mjjj=m3j[selection.all()]
+                               )
+                               
+            output["m01"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m01=m_ij[:,0][selection.all()]
+                                )
+                                
+            output["m12"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m12=m_ij[:,1][selection.all()]
+                                )
+                                
+            output["m20"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m20=m_ij[:,2][selection.all()]
+                                )
+                                
+            output["dR01"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dR01=dR_ij[:,0][selection.all()]
+                                )
+                                
+            output["dR12"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dR12=dR_ij[:,1][selection.all()]
+                                )
+                                
+            output["dR20"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dR20=dR_ij[:,2][selection.all()]
+                                )
+                                
+            output["dEta01"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dEta01=dEta_ij[:,0][selection.all()]
+                                )
+                                
+            output["dEta12"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dEta12=dEta_ij[:,1][selection.all()]
+                                )
+                                
+            output["dEta20"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                dEta20=dEta_ij[:,2][selection.all()]
+                                )
+                                
+            output["m01overM"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m01overM=m_01_overM[selection.all()]
+                                )
+                                
+            output["m12overM"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m12overM=m_12_overM[selection.all()]
+                                )
+                                
+            output["m20overM"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                m20overM=m_20_overM[selection.all()]
+                                )
+                                
+            output["pt0"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                pt0=selected_jets[:, 0][selection.all()].pt
+                                )
+                                
+            output["pt1"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                pt1=selected_jets[:, 1][selection.all()].pt
+                                )
+                                
+            output["pt2"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                pt2=selected_jets[:, 2][selection.all()].pt
+                                )
+                                
+            output["eta0"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                eta0=selected_jets[:, 0][selection.all()].eta
+                                )
+                                
+            output["eta1"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                eta1=selected_jets[:, 1][selection.all()].eta
+                                )
+                                
+            output["eta2"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                eta2=selected_jets[:, 2][selection.all()].eta
+                                )
+            output["ptoverM0"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                ptoverM0=pt_i_overM[:, 0][selection.all()]
+                                )
+            output["ptoverM1"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                ptoverM1=pt_i_overM[:, 1][selection.all()]
+                                )
+            output["ptoverM2"].fill(dataset=dataset_name, 
+                                selection=selection_name, 
+                                ptoverM2=pt_i_overM[:, 2][selection.all()]
+                                )
 
         return output
 
@@ -142,21 +314,22 @@ class TrijetHistogramMaker(processor.ProcessorABC):
 if __name__ == "__main__":
 
     import argparse
-    parser = argparse.ArgumentParser(description="Make histograms for B FFR data")
+    parser = argparse.ArgumentParser(description="Make histograms for Trijet data")
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument("--subsamples", "-d", type=str, help="List of subsamples to run (comma-separated")
-    input_group.add_argument("--quicktest", "-q", action="store_true", help="Run a small test job")
+    input_group.add_argument("--test", "-t", action="store_true", help="Run a small test job")
+    parser.add_argument("--quicktest", "-q", action="store_true", help="Run a small test job on selected dataset")
     parser.add_argument("--year", "-y", type=str, help="Year: 2016, 2017, or 2018")
     parser.add_argument("--isMC", "-m", action="store_true", help="Set run over MC instead of collision data")
-    parser.add_argument("--workers", "-w", type=int, default=16, help="Number of workers")
-    parser.add_argument("--save_tag", "-s", type=str, help="Save tag for output file")
+    parser.add_argument("--workers", "-w", type=int, default=32, help="Number of workers")
+    parser.add_argument("--save_tag", "-o", type=str, help="Save tag for output file")
     #parser.add_argument("--nopbar", action="store_true", help="Disable progress bar (do this on condor)")
     parser.add_argument("--condor", action="store_true", help="Flag for running on condor")
     args = parser.parse_args()
 
-    if args.quicktest:
+    if args.test:
         year = "2017"
-        subsamples = ["Res1ToRes2GluTo3Glu_M1-3000_R-0p5"]
+        subsamples = ["Res1ToRes2GluTo3Glu_M1-1000_R-0p5"]
         isMC = True
         save_tag = "test"
     else:
@@ -166,6 +339,18 @@ if __name__ == "__main__":
         save_tag = args.save_tag
 
     from toffea.filelists.filelists import filelist
+    from toffea.filelists.samplenames import res1tores2_samples, zprime3g_samples, samples
+    
+    for item in subsamples:
+        if "QCD" in item:
+            subsamples.remove(item)
+            subsamples += samples[year]["QCD"]
+        if "SingleMuon" in item:
+            subsamples.remove(item)
+            subsamples += samples[year]["SingleMuon"]
+        break
+    
+    print("Please check samples to process: ", subsamples)
 
     # Make dictionary of subsample : [files to run]
     subsample_files = {}
@@ -173,19 +358,19 @@ if __name__ == "__main__":
         if not subsample_name in filelist[year]:
             raise ValueError(f"Dataset {subsample_name} not in dictionary.")
     for subsample_name in subsamples:
-        #with open(filelist[year][subsample_name], 'r') as filelist_txt:
-        #    subsample_files[subsample_name] = [x.strip() for x in filelist_txt.readlines()]
         subsample_files[subsample_name] = filelist[year][subsample_name]
 
-        if args.quicktest:
+        if args.quicktest or args.test:
             subsample_files[subsample_name] = subsample_files[subsample_name][:3]
 
         if args.condor:
             # Copy input files to worker node... seems to fail sporadically when reading remote input files :(
             local_filelist = []
             for remote_file in subsample_files[subsample_name]:
+                print(remote_file)
                 retry_counter = 0
                 expected_path = f"{os.path.expandvars('$_CONDOR_SCRATCH_DIR')}/{os.path.basename(remote_file)}"
+                print(expected_path)
                 while retry_counter < 5 and not (os.path.isfile(expected_path) and os.path.getsize(expected_path) > 1.e6):
                     if retry_counter >= 1:
                         time.sleep(10)
@@ -198,8 +383,6 @@ if __name__ == "__main__":
             subsample_files[subsample_name] = local_filelist
 
     ts_start = time.time()
-    print(subsample_files)
-
 
     output = processor.run_uproot_job(subsample_files,
                                         treename='Events',

@@ -8,10 +8,12 @@ from pprint import pprint
 
 # Signal: Res1ToRes2
 res1tores2_samples = []
+res1tores2_decay_mode = []
 for decay_mode in ["Res1ToRes2QTo3Q", "Res1ToRes2GluTo3Glu"]:
-    for signal_mass in [500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]:
-        for signal_R in ["0p1", "0p2", "0p3", "0p5", "0p7", "0p9"]:
-            res1tores2_samples.append("{}_M1-{}_R-{}".format(decay_mode, signal_mass, signal_R))
+	res1tores2_decay_mode.append(decay_mode)
+	for signal_mass in [500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]:
+		for signal_R in ["0p1", "0p2", "0p3", "0p5", "0p7", "0p9"]:
+			res1tores2_samples.append("{}_M1-{}_R-{}".format(decay_mode, signal_mass, signal_R))
 
 # Signal: ZPrimeTo3Gluons
 signal_masses = [500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000]
