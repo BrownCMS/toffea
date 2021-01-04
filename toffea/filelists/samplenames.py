@@ -7,19 +7,21 @@ Module for organizing samples
 from pprint import pprint
 
 # Signal: Res1ToRes2
-res1tores2_samples = []
-res1tores2_decay_mode = []
+res1tores2_samples = {}
 for decay_mode in ["Res1ToRes2QTo3Q", "Res1ToRes2GluTo3Glu"]:
-	res1tores2_decay_mode.append(decay_mode)
+	res1tores2_samples_list = []
 	for signal_mass in [500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]:
 		for signal_R in ["0p1", "0p2", "0p3", "0p5", "0p7", "0p9"]:
-			res1tores2_samples.append("{}_M1-{}_R-{}".format(decay_mode, signal_mass, signal_R))
+			res1tores2_samples_list.append("{}_M1-{}_R-{}".format(decay_mode, signal_mass, signal_R))
+	res1tores2_samples[decay_mode] = res1tores2_samples_list
 
 # Signal: ZPrimeTo3Gluons
+zprime3g_samples = {}
 signal_masses = [500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000]
-zprime3g_samples = []
+zprime3g_samples_list = []
 for signal_mass in signal_masses:
-	zprime3g_samples.append(f"ZprimeTo3Gluon_M{signal_mass}")
+	zprime3g_samples_list.append(f"ZprimeTo3Gluon_M{signal_mass}")
+zprime3g_samples["ZprimeTo3Gluon"] = zprime3g_samples_list
 
 samples = {
 	"2016": {
@@ -40,9 +42,9 @@ samples = {
 }
 
 # Add signal samples to dictionary
-for year in ["2016", "2017", "2018"]:
-	for sample_name in res1tores2_samples + zprime3g_samples:
-		samples[year][sample_name] = [sample_name]
+for year in ["2017"]:
+	samples[year].update(res1tores2_samples)
+	samples[year].update(zprime3g_samples)
 
 # Subsamples
 subsamples = {}

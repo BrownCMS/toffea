@@ -4,7 +4,7 @@ This script makes text file lists of the input skims on BRUX
 import os
 from pprint import pprint
 from glob import glob
-from toffea.filelists.samplenames import samples, subsamples, res1tores2_samples, res1tores2_decay_mode, zprime3g_samples
+from toffea.filelists.samplenames import samples, subsamples
 import pickle
 import ROOT
 from collections import defaultdict
@@ -46,10 +46,9 @@ for year in ["2016", "2017", "2018"]:
 #   Res1ToRes2GluTo3Glu_M1-8000_R-0p9_TuneCP5_13TeV-madgraph-pythia8/Res1ToRes2GluTo3Glu_M1-8000_R-0p9/201211_215140/0000
 res1res2_version = "v2_0_7"
 for year in ["2017"]:
-	for decay_mode in res1tores2_decay_mode:
+	for decay_mode in ["Res1ToRes2QTo3Q", "Res1ToRes2GluTo3Glu"]:
+		res1tores2_samples = samples[year][decay_mode]
 		for sample in res1tores2_samples:
-			if sample.find(decay_mode) < 0:
-				continue
 			glob_pattern = f"{basedir}/{res1res2_version}/{decay_mode}*{year}/{sample}*/*/*/*/nanoskim*root"
 			filelist[year][sample] = glob(glob_pattern)
 			if len(filelist[year][sample]) == 0:
@@ -59,6 +58,7 @@ for year in ["2017"]:
 # /home/dryu/store/DijetSkim/v2_0_4/ZprimeTo3Gluon_2018/ZprimeTo3Gluon_TuneCUETP8M1_13TeV_pythia8/ZprimeTo3Gluon_scan_2018/201211_232950/0000
 zprime3g_version = "v2_0_7"
 for year in ["2017"]:
+	zprime3g_samples = samples[year]["ZprimeTo3Gluon"]
 	for sample in zprime3g_samples:
 		glob_pattern = f"{basedir}/{zprime3g_version}/ZprimeTo3Gluon_{year}/{sample}*/*/*/*/nanoskim*root"
 		filelist[year][sample] = glob(glob_pattern)
