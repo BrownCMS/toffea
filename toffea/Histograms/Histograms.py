@@ -53,26 +53,31 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         self._accumulator["mjjj"] = hist.Hist("Events", 
                                                 dataset_axis, 
                                                 selection_axis, 
-                                                hist.Bin("mjjj", r"$M_{jjj}$ [GeV]", dijet_binning), 
-                                                )
-
-        for pair in [(0, 1), (1, 2), (2, 0)]:
-            self._accumulator[f"m{pair[0]}{pair[1]}"] = hist.Hist("Events", 
-                                                    dataset_axis, 
-                                                    selection_axis, 
-                                                    hist.Bin(f"m{pair[0]}{pair[1]}", f"$m_{{{pair[0]}{pair[1]}}}$ [GeV]", dijet_binning))
-            self._accumulator[f"dR{pair[0]}{pair[1]}"] = hist.Hist("Events", 
-                                                    dataset_axis, 
-                                                    selection_axis, 
-                                                    hist.Bin(f"dR{pair[0]}{pair[1]}", f"$\\Delta R_{{{pair[0]}{pair[1]}}}$ [GeV]", 100, 0., 4))
-            self._accumulator[f"dEta{pair[0]}{pair[1]}"] = hist.Hist("Events", 
-                                                    dataset_axis, 
-                                                    selection_axis, 
-                                                    hist.Bin(f"dEta{pair[0]}{pair[1]}", f"$\\Delta \\eta_{{{pair[0]}{pair[1]}}}$ [GeV]", 100, 0., 2))
-            self._accumulator[f"m{pair[0]}{pair[1]}overM"] = hist.Hist("Events", 
-                                                    dataset_axis, 
-                                                    selection_axis, 
-                                                    hist.Bin(f"m{pair[0]}{pair[1]}overM", r"$m_{{{pair0}{pair1}}}/M_{{jjj}}$".format(T="T", pair0=pair[0], pair1=pair[1], jjj="jjj"), 100, 0, 1))
+                                                hist.Bin("mjjj", r"$M_{jjj}$ [GeV]", dijet_binning))
+        self._accumulator["m_ij"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin("m_01", "$m_{01}$ [GeV]", dijet_binning),
+                                                hist.Bin("m_12", "$m_{12}$ [GeV]", dijet_binning),
+                                                hist.Bin("m_20", "$m_{20}$ [GeV]", dijet_binning))
+        self._accumulator["dR_ij"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin("dR_01", "$\\Delta R_{01}$ [GeV]", 100, 0., 4),
+                                                hist.Bin("dR_12", "$\\Delta R_{12}$ [GeV]", 100, 0., 4),
+                                                hist.Bin("dR_20", "$\\Delta R_{20}$ [GeV]", 100, 0., 4))
+        self._accumulator["dEta_ij"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin("dEta_01", "$\\Delta \\eta_{01}$ [GeV]", 100, 0., 2),
+                                                hist.Bin("dEta_12", "$\\Delta \\eta_{12}$ [GeV]", 100, 0., 2),
+                                                hist.Bin("dEta_20", "$\\Delta \\eta_{20}$ [GeV]", 100, 0., 2))
+        self._accumulator["moverM_ij"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin("moverM_01", "$m_{01}/M_{jjj}$", 100, 0, 1),
+                                                hist.Bin("moverM_12", "$m_{12}/M_{jjj}$", 100, 0, 1),
+                                                hist.Bin("moverM_20", "$m_{20}/M_{jjj}$", 100, 0, 1))
                                                     
         for jet in [0, 1, 2]:
             self._accumulator[f"pt{jet}"] = hist.Hist("Events", 
@@ -87,6 +92,7 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                                                     dataset_axis, 
                                                     selection_axis, 
                                                     hist.Bin(f"ptoverM{jet}", r"$p^{T}_{jet}/M_{{jjj}}$".format(T="T", jet=jet, jjj="jjj"), 100, 0, 2.5))
+                                                
 
     @property
     def accumulator(self):
@@ -219,64 +225,32 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                                 mjjj=m3j[selection.require(**{name: True for name in selection_items[selection_name]})]
                                )
                                
-            output["m01"].fill(dataset=dataset_name, 
+            output["m_ij"].fill(dataset=dataset_name, 
                                 selection=selection_name, 
-                                m01=m_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})]
+                                m_01=m_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                m_12=m_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                m_20=m_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
                                 )
                                 
-            output["m12"].fill(dataset=dataset_name, 
+            output["dR_ij"].fill(dataset=dataset_name, 
                                 selection=selection_name, 
-                                m12=m_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})]
+                                dR_01=dR_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                dR_12=dR_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                dR_20=dR_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
                                 )
                                 
-            output["m20"].fill(dataset=dataset_name, 
+            output["dEta_ij"].fill(dataset=dataset_name, 
                                 selection=selection_name, 
-                                m20=m_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
+                                dEta_01=dEta_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                dEta_12=dEta_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})],
+                                dEta_20=dEta_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
                                 )
                                 
-            output["dR01"].fill(dataset=dataset_name, 
+            output["moverM_ij"].fill(dataset=dataset_name, 
                                 selection=selection_name, 
-                                dR01=dR_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["dR12"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                dR12=dR_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["dR20"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                dR20=dR_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["dEta01"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                dEta01=dEta_ij[:,0][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["dEta12"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                dEta12=dEta_ij[:,1][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["dEta20"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                dEta20=dEta_ij[:,2][selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["m01overM"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                m01overM=m_01_overM[selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["m12overM"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                m12overM=m_12_overM[selection.require(**{name: True for name in selection_items[selection_name]})]
-                                )
-                                
-            output["m20overM"].fill(dataset=dataset_name, 
-                                selection=selection_name, 
-                                m20overM=m_20_overM[selection.require(**{name: True for name in selection_items[selection_name]})]
+                                moverM_01=m_01_overM[selection.require(**{name: True for name in selection_items[selection_name]})],
+                                moverM_12=m_12_overM[selection.require(**{name: True for name in selection_items[selection_name]})],
+                                moverM_20=m_20_overM[selection.require(**{name: True for name in selection_items[selection_name]})]
                                 )
                                 
             output["pt0"].fill(dataset=dataset_name, 
