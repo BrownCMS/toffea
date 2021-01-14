@@ -48,8 +48,15 @@ class TrijetHistogramMaker(processor.ProcessorABC):
 
         self._accumulator = processor.dict_accumulator()
         self._accumulator["total_events"] = processor.defaultdict_accumulator(int)
-        for pt_cut in range(100,1000,50):
+        self._accumulator["Fired_HLT"] = processor.defaultdict_accumulator(int)
+        for pt_cut in range(30,1150,5):
             self._accumulator[f"N_min_pT_cut{pt_cut}".format(pt_cut)] = processor.defaultdict_accumulator(int)
+        for eta_cut in np.arange(0,2.5,0.05):
+            self._accumulator[f"N_max_eta_cut{eta_cut}".format(eta_cut)] = processor.defaultdict_accumulator(int)
+        for dEta_max_cut in np.arange(0,5,0.1):
+            self._accumulator[f"N_dEta_jj_max_cut{dEta_max_cut}".format(dEta_max_cut)] = processor.defaultdict_accumulator(int)
+        for dR_min_cut in np.arange(0,5,0.1):
+            self._accumulator[f"N_dR_jj_min_cut{dR_min_cut}".format(dR_min_cut)] = processor.defaultdict_accumulator(int)
 
     @property
     def accumulator(self):
@@ -110,68 +117,76 @@ class TrijetHistogramMaker(processor.ProcessorABC):
         dR_ij = selected_jets[:, jet_i].delta_r(selected_jets[:, jet_j])
         dEta_ij = abs(selected_jets[:, jet_i].eta - selected_jets[:, jet_j].eta)
         
-        dR_0_12 = selected_jets[:, 0].delta_r(selected_jets[:, 1] + selected_jets[:, 2])
-        dEta_0_12 = abs(selected_jets[:, 0].eta - (selected_jets[:, 1] + selected_jets[:, 2]).eta)
-        dPhi_0_12 = abs(selected_jets[:, 0].phi - (selected_jets[:, 1] + selected_jets[:, 2]).phi)
-        dPt_0_12 = selected_jets[:, 0].pt - (selected_jets[:, 1] + selected_jets[:, 2]).pt
-        
         max_dR   = awk.max(dR_ij, axis=1)
         max_dEta = awk.max(dEta_ij, axis=1)
         min_dR   = awk.min(dR_ij, axis=1)
         min_dEta = awk.min(dEta_ij, axis=1)
         min_pT   = awk.min(selected_jets.pt, axis=1)
+        max_eta  = abs(awk.max(selected_jets.eta, axis=1))
+        
+        jet_k = [2, 0, 1]
+        dR_i_jk = selected_jets[:, jet_i].delta_r(selected_jets[:, jet_j] + selected_jets[:, jet_k])
+        dEta_i_jk = abs(selected_jets[:, jet_i].eta - (selected_jets[:, jet_j] + selected_jets[:, jet_k]).eta)
+        dPhi_i_jk = abs(selected_jets[:, jet_i].phi - (selected_jets[:, jet_j] + selected_jets[:, jet_k]).phi)
+        dPt_i_jk = abs(selected_jets[:, jet_i].pt - (selected_jets[:, jet_j] + selected_jets[:, jet_k]).pt)
+        
+        max_dPhi_jjj = awk.max(dPhi_i_jk, axis=1)
 
         m3j = selected_jets.sum().mass
         
         pt_i_overM = selected_jets.pt / m3j
+        max_pt_overM = awk.max(pt_i_overM, axis=1)
+        min_pt_overM = awk.min(pt_i_overM, axis=1)
         m_01_overM = m_ij[:,0] / m3j
         m_12_overM = m_ij[:,1] / m3j
         m_20_overM = m_ij[:,2] / m3j
         
-        # Event selection - pre-selection & HLT_trigger
-        selections = {}
-        selection_items = {}
-
-        selections["JetHLT"] = PackedSelection()
-        selection_items["JetHLT"] = []
-        if year == "2016":
-            JetHLT_mask = []
-            if "2016B2" in dataset_name:
-                JetHLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
-            elif "2016H" in dataset_name:
-                JetHLT_mask = events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
-            else:
-                JetHLT_mask = events.HLT.PFHT800 | events.HLT.PFHT900 | events.HLT.AK8PFJet450 | events.HLT.AK8PFJet500 | events.HLT.PFJet500 | events.HLT.CaloJet500_NoJetID
-            selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
-            selection_items["JetHLT"].append("JetHLT_fired")
-        if year == "2017":
-            JetHLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
-            selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
-            selection_items["JetHLT"].append("JetHLT_fired")
-        if year == "2018":
-            JetHLT_mask = events.HLT.PFHT1050 | events.HLT.AK8PFJet500 | events.HLT.AK8PFJet550 | events.HLT.CaloJet500_NoJetID | events.HLT.CaloJet550_NoJetID | events.HLT.PFJet500
-            selections["JetHLT"].add("JetHLT_fired", JetHLT_mask[event_mask])
-            selection_items["JetHLT"].append("JetHLT_fired")
-        # selections["JetHLT"].add("MaxDEta", max_dEta < 1.3)
-        # selection_items["JetHLT"].append("MaxDEta")
-        # selections["JetHLT"].add("MinDR", min_dR > 0.4)
-        # selection_items["JetHLT"].append("MinDR")
-        # selections["JetHLT"].add("MinJetPt", min_pT > 50.)
-        # selection_items["JetHLT"].append("MinJetPt")
-        
-        # Implement different cuts
-        for pt_cut in range(100,1000,50):
-            selections[f"min_pT_cut{pt_cut}".format(pt_cut)] = selections["JetHLT"]
-            selections[f"min_pT_cut{pt_cut}".format(pt_cut)].add("MinJetPt_cut", min_pT > pt_cut)
-            selection_items[f"min_pT_cut{pt_cut}".format(pt_cut)] = selection_items["JetHLT"]
-            selection_items[f"min_pT_cut{pt_cut}".format(pt_cut)].append("MinJetPt_cut")
-            sel_mask = selections["JetHLT"].require(**{name: True for name in selection_items["JetHLT"]})
-            for selection_name, selection in selections.items():
-                if "JetHLT" in selection_name:
-                    continue
-                print(selection_name)
-                sel_mask = sel_mask & selection.require(**{name: True for name in selection_items[selection_name]})
+        for pt_cut in range(30,1150,5):
+            cut_name = f"min_pT_cut{pt_cut}".format(pt_cut)
+            selection = PackedSelection()
+            selection.add("MinJetPt_cut", min_pT > pt_cut)
+            sel_mask = selection.require(**{name: True for name in selection.names})
             output[f"N_min_pT_cut{pt_cut}".format(pt_cut)][dataset_name] += events_3j[sel_mask].__len__()
+            
+        for eta_cut in np.arange(0,2.5,0.05):
+            cut_name = f"max_eta_cut{eta_cut}".format(eta_cut)
+            selection = PackedSelection()
+            selection.add("MaxJetEta_cut", max_eta < eta_cut)
+            sel_mask = selection.require(**{name: True for name in selection.names})
+            output[f"N_max_eta_cut{eta_cut}".format(eta_cut)][dataset_name] += events_3j[sel_mask].__len__()
+            
+        for dEta_max_cut in np.arange(0,5,0.1):
+            cut_name = f"dEta_max_cut{dEta_max_cut}".format(dEta_max_cut)
+            selection = PackedSelection()
+            selection.add("MaxJJdEta_cut", max_dEta < dEta_max_cut)
+            sel_mask = selection.require(**{name: True for name in selection.names})
+            output[f"N_dEta_jj_max_cut{dEta_max_cut}".format(dEta_max_cut)][dataset_name] += events_3j[sel_mask].__len__()
+            
+        for dR_min_cut in np.arange(0,5,0.1):
+            cut_name = f"dR_min_cut{dR_min_cut}".format(dR_min_cut)
+            selection = PackedSelection()
+            selection.add("MinJJdR_cut", min_dR > dR_min_cut)
+            sel_mask = selection.require(**{name: True for name in selection.names})
+            output[f"N_dR_jj_min_cut{dR_min_cut}".format(dR_min_cut)][dataset_name] += events_3j[sel_mask].__len__()
+            
+        #min cut for the variable dPhi_jjj_max
+        # for dPhi_jjj_max_min_cut in range(0,6,0.1):
+            # cut_name = f"dPhi_jjj_max_min_cut{dPhi_jjj_max_min_cut}".format(dPhi_jjj_max_min_cut)
+            # selections[cut_name] = PackedSelection()
+            # selections[cut_name].add("j_jj_dPhi_max_cut", min_dR > dPhi_jjj_max_min_cut)
+            # selection_items[cut_name] = []
+            # selection_items[cut_name].append("j_jj_dPhi_max_cut")
+            # sel_mask = HLT_mask & selections[cut_name].require(**{name: True for name in selection_items[cut_name]})
+            # output[f"N_dPhi_jjj_max_min_cut{dPhi_jjj_max_min_cut}".format(dPhi_jjj_max_min_cut)][dataset_name] += events_3j[sel_mask].__len__()
+            
+        # for dPhi_jjj_min_max_cut in range(0,6,0.1):
+            # cut_name = f"dPhi_jjj_max_min_cut{dPhi_jjj_max_min_cut}".format(dPhi_jjj_max_min_cut)
+            # selections[cut_name] = PackedSelection()
+            # selections[cut_name].add("j_jj_dPhi_max_cut", min_dR > dPhi_jjj_max_min_cut)
+            # selection_items[cut_name] = []
+            # selection_items[cut_name].append("j_jj_dPhi_max_cut")
+            # sel_mask = HLT_mask & selections[cut_name].require(**{name: True for name in selection_items[cut_name]})
+            # output[f"N_dPhi_jjj_max_min_cut{dPhi_jjj_max_min_cut}".format(dPhi_jjj_max_min_cut)][dataset_name] += events_3j[sel_mask].__len__()
 
         return output
 
@@ -238,7 +253,7 @@ if __name__ == "__main__":
         subsample_files[subsample_name] = filelist[year][subsample_name]
 
         if args.quicktest or args.test:
-            subsample_files[subsample_name] = subsample_files[subsample_name][:3]
+            subsample_files[subsample_name] = subsample_files[subsample_name][:1]
 
         if args.condor:
             # Copy input files to worker node... seems to fail sporadically when reading remote input files :(
