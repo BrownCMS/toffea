@@ -344,10 +344,22 @@ if __name__ == "__main__":
         if not subsample_name in filelist[year]:
             raise ValueError(f"Dataset {subsample_name} not in dictionary.")
     for subsample_name in samples2process:
-        subsample_files[subsample_name] = filelist[year][subsample_name]
+        # Drop some abundant QCD MC files
+        if "QCD_Pt_600to800" in subsample_name:
+            subsample_files[subsample_name] = filelist[year][subsample_name][:13]
+        elif "QCD_Pt_800to1000" in subsample_name:
+            subsample_files[subsample_name] = filelist[year][subsample_name][:3]
+        elif "QCD_Pt_300to470" in subsample_name:
+            subsample_files[subsample_name] = filelist[year][subsample_name]
+        elif "QCD_Pt_470to600" in subsample_name:
+            subsample_files[subsample_name] = filelist[year][subsample_name]
+        elif "QCD_Pt_" in subsample_name:
+            subsample_files[subsample_name] = filelist[year][subsample_name][:1]
+        else:
+            subsample_files[subsample_name] = filelist[year][subsample_name]
 
         if args.quicktest or args.test:
-            subsample_files[subsample_name] = subsample_files[subsample_name][:3]
+            subsample_files[subsample_name] = subsample_files[subsample_name][:1]
 
         if args.condor:
             # Copy input files to worker node... seems to fail sporadically when reading remote input files :(
@@ -367,6 +379,10 @@ if __name__ == "__main__":
                 os.system("ls -lrth $_CONDOR_SCRATCH_DIR")
                 local_filelist.append(f"{os.path.expandvars('$_CONDOR_SCRATCH_DIR')}/{os.path.basename(remote_file)}")
             subsample_files[subsample_name] = local_filelist
+            
+    for key in subsample_files.keys():
+        size = len(subsample_files[key])
+        print(f"For {key}, {size} file(s) will be processed")
 
     ts_start = time.time()
 
@@ -374,7 +390,7 @@ if __name__ == "__main__":
                                         treename='Events',
                                         processor_instance=TrijetHistogramMaker(isMC=isMC),
                                         executor=processor.futures_executor,
-                                        chunksize=50000,
+                                        chunksize=250000,
                                         executor_args={
                                             'workers': args.workers, 
                                             'flatten': False, 
