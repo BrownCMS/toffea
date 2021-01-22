@@ -150,6 +150,14 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                                                 dataset_axis, 
                                                 selection_axis, 
                                                 hist.Bin(f"max_eta", "$|\\eta|_{max}$", 100, 0, 2.5))  
+        self._accumulator[f"max_ptoverM"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin(f"max_ptoverM", "max $p^{T}/M_{{jjj}}$", 100, 0, 5))  
+        self._accumulator[f"min_ptoverM"] = hist.Hist("Events", 
+                                                dataset_axis, 
+                                                selection_axis, 
+                                                hist.Bin(f"min_ptoverM", "min $p^{T}/M_{{jjj}}$", 100, 0, 2.5))  
         self._accumulator[f"max_dR_j_jj"] = hist.Hist("Events", 
                                                 dataset_axis, 
                                                 selection_axis, 
@@ -367,7 +375,7 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                                 dPtoverM_1_20=dPtoverM_1_20[selection_mask],
                                 dPtoverM_2_01=dPtoverM_2_01[selection_mask]
                                 )
-                                
+                pt_i_overM_2fill = pt_i_overM[selection_mask]
                 dR_ij_2fill   = dR_ij[selection_mask]
                 dEta_ij_2fill = dEta_ij[selection_mask]
                 dR_i_jk_2fill   = dR_i_jk[selection_mask]
@@ -377,6 +385,9 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                 dPtoverM_1_20_2fill = dPtoverM_1_20[selection_mask]
                 dPtoverM_2_01_2fill = dPtoverM_2_01[selection_mask]
                 selected_jets_2fill = selected_jets[selection_mask]
+                
+                max_pt_overM_2fill   = awk.max(pt_i_overM_2fill, axis=1)
+                min_pt_overM_2fill   = awk.min(pt_i_overM_2fill, axis=1)
                 max_dR_2fill   = awk.max(dR_ij_2fill, axis=1)
                 max_dEta_2fill = awk.max(dEta_ij_2fill, axis=1)
                 min_dR_2fill   = awk.min(dR_ij_2fill, axis=1)
@@ -396,6 +407,9 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                     min_dPtoverM_i_jk_2fill.append(min(pair))
                 max_dPtoverM_i_jk_2fill = np.array(max_dPtoverM_i_jk_2fill)
                 min_dPtoverM_i_jk_2fill = np.array(min_dPtoverM_i_jk_2fill)
+                
+                max_pt_overM_2fill = awk.fill_none(max_pt_overM_2fill, -99)
+                min_pt_overM_2fill = awk.fill_none(min_pt_overM_2fill, -99)
                 max_dR_2fill = awk.fill_none(max_dR_2fill, -99)
                 max_dEta_2fill = awk.fill_none(max_dEta_2fill, -99)
                 min_dR_2fill = awk.fill_none(min_dR_2fill, -99)
@@ -420,6 +434,10 @@ class TrijetHistogramMaker(processor.ProcessorABC):
                 output["min_pt"].fill(dataset=dataset_name, selection=selection, min_pt=min_pt_2fill)
                 
                 output["max_eta"].fill(dataset=dataset_name, selection=selection, max_eta=max_eta_2fill)
+                
+                output["max_ptoverM"].fill(dataset=dataset_name, selection=selection, max_ptoverM=max_pt_overM_2fill)
+                
+                output["min_ptoverM"].fill(dataset=dataset_name, selection=selection, min_ptoverM=min_pt_overM_2fill)
                 
                 output["max_dR_j_jj"].fill(dataset=dataset_name, selection=selection, max_dR_j_jj=max_dR_i_jk_2fill)
                 
@@ -541,19 +559,43 @@ if __name__ == "__main__":
 
     ts_start = time.time()
 
-    output = processor.run_uproot_job(subsample_files,
+    # Manually override the events to be processed for certain QCD samples
+    if(len(samples2process) == 1 and "QCD" in samples2process[0]):
+        chunk_size = 50000
+        if "QCD_Pt_1800to2400" in samples2process[0]:
+            chunk_size = 15000
+        if "QCD_Pt_2400to3200" in samples2process[0]:
+            chunk_size = 1500
+        if "QCD_Pt_3200toInf" in samples2process[0]:
+            chunk_size = 500
+        print("Processing QCD samples from which we only need a small amount of events!")
+        print("Events to be processed: ", chunk_size)
+        output = processor.run_uproot_job(subsample_files,
                                         treename='Events',
                                         processor_instance=TrijetHistogramMaker(isMC=isMC),
                                         executor=processor.futures_executor,
-                                        chunksize=250000,
+                                        chunksize=chunk_size,
+                                        maxchunks=1,
                                         executor_args={
                                             'workers': args.workers, 
                                             'flatten': False, 
                                             'status':not args.condor, 
-                                            "schema": HackSchema},
-                                        # maxchunks=1,
+                                            "schema": HackSchema}
                                         )
-    util.save(output, f"DataHistograms_{save_tag}.coffea")
+        util.save(output, f"DataHistograms_{save_tag}_{samples2process[0]}.coffea")
+    else:
+        output = processor.run_uproot_job(subsample_files,
+                                            treename='Events',
+                                            processor_instance=TrijetHistogramMaker(isMC=isMC),
+                                            executor=processor.futures_executor,
+                                            chunksize=250000,
+                                            executor_args={
+                                                'workers': args.workers, 
+                                                'flatten': False, 
+                                                'status':not args.condor, 
+                                                "schema": HackSchema}
+                                            )
+        util.save(output, f"DataHistograms_{save_tag}.coffea")
 
     # Performance benchmarking and cutflows
     ts_end = time.time()

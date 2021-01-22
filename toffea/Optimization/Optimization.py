@@ -291,19 +291,43 @@ if __name__ == "__main__":
 
     ts_start = time.time()
 
-    output = processor.run_uproot_job(subsample_files,
+    # Manually override the events to be processed for certain QCD samples
+    if(len(samples2process) == 1 and "QCD" in samples2process[0]):
+        chunk_size = 50000
+        if "QCD_Pt_1800to2400" in samples2process[0]:
+            chunk_size = 15000
+        if "QCD_Pt_2400to3200" in samples2process[0]:
+            chunk_size = 1500
+        if "QCD_Pt_3200toInf" in samples2process[0]:
+            chunk_size = 500
+        print("Processing QCD samples from which we only need a small amount of events!")
+        print("Events to be processed: ", chunk_size)
+        output = processor.run_uproot_job(subsample_files,
                                         treename='Events',
                                         processor_instance=TrijetHistogramMaker(isMC=isMC),
                                         executor=processor.futures_executor,
-                                        chunksize=250000,
+                                        chunksize=chunk_size,
+                                        maxchunks=1,
                                         executor_args={
                                             'workers': args.workers, 
                                             'flatten': False, 
                                             'status':not args.condor, 
-                                            "schema": HackSchema},
-                                        # maxchunks=1,
+                                            "schema": HackSchema}
                                         )
-    util.save(output, f"DataHistograms_{save_tag}.coffea")
+        util.save(output, f"DataHistograms_{save_tag}_{samples2process[0]}.coffea")
+    else:
+        output = processor.run_uproot_job(subsample_files,
+                                            treename='Events',
+                                            processor_instance=TrijetHistogramMaker(isMC=isMC),
+                                            executor=processor.futures_executor,
+                                            chunksize=250000,
+                                            executor_args={
+                                                'workers': args.workers, 
+                                                'flatten': False, 
+                                                'status':not args.condor, 
+                                                "schema": HackSchema}
+                                            )
+        util.save(output, f"DataHistograms_{save_tag}.coffea")
 
     # Performance benchmarking and cutflows
     ts_end = time.time()
